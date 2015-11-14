@@ -36,7 +36,7 @@ init([]) -> {ok, { {one_for_one, 5, 10}, []} }.
 %% ===================================================================
 
 do_start_listener(Port) ->
-    ListenerSpec = ranch:child_spec(?LISTENER(Port), 100, ranch_tcp,
+    ListenerSpec = ranch:child_spec(?LISTENER(Port), number_of_listeners(), ranch_tcp,
                                     [{port, Port}], syrup_protocol, []),
     Result = case supervisor:start_child(?MODULE, ListenerSpec) of
                  {ok, Pid} -> {ok, Pid};
@@ -71,3 +71,8 @@ do_listener_exist(Port) ->
         _Value -> true
     end.
 
+number_of_listeners() ->
+    case os:getenv("SYRUP_LISTENERS") of
+        false -> 10;
+        Value -> list_to_integer(Value)
+    end.
