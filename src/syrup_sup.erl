@@ -6,6 +6,7 @@
 -export([start_link/0]).
 -export([start_listener/1]).
 -export([stop_listener/1]).
+-export([listener_exists/1]).
 
 %% Supervisor callbacks
 -export([init/1]).
@@ -22,15 +23,13 @@ start_link() ->
 
 start_listener(Port) -> do_start_listener(Port).
 stop_listener(Port) -> do_stop_listener(Port).
+listener_exists(Port) -> do_listener_exist(Port).
 
 %% ===================================================================
 %% Supervisor callbacks
 %% ===================================================================
 
-init([]) ->
-    RanchSupSpec = {ranch_sup, {ranch_sup, start_link, []},
-                    permanent, 5000, supervisor, [ranch_sup]},
-    {ok, { {one_for_one, 5, 10}, [RanchSupSpec]} }.
+init([]) -> {ok, { {one_for_one, 5, 10}, []} }.
 
 %% ===================================================================
 %% Internal functions
@@ -64,3 +63,11 @@ do_stop_listener(Port) ->
             error_logger:error_msg("Unable to stop listener: Port: ~p.", [Port]),
             {error, not_found}
     end.
+
+do_listener_exist(Port) ->
+    Children = supervisor:which_children(?MODULE),
+    case proplists:lookup(?LISTENER_ID(Port), Children) of
+        none -> false;
+        _Value -> true
+    end.
+
