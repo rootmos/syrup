@@ -8,8 +8,7 @@
   {registered, []},
   {applications, [
                   kernel,
-                  stdlib,
-                  ranch
+                  stdlib
                  ]},
   {mod, { syrup_app, []}},
   {env, []}

@@ -10,7 +10,10 @@
 %% ===================================================================
 
 start(_StartType, _StartArgs) ->
-    syrup_sup:start_link().
+    {ok, Pid} = syrup_sup:start_link(),
+    {ok, _} = syrup_sup:start_listener(5000),
+    {ok, _} = syrup_sup:start_listener(6000),
+    {ok, Pid}.
 
 stop(_State) ->
     ok.
