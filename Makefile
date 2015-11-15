@@ -3,6 +3,8 @@ COMPILE=.compile-flag
 BUILD=.build-flag
 DEPS=.deps-flag
 
+docker=sudo docker
+
 all: $(COMPILE) $(BUILD)
 
 $(DEPS): rebar.config
@@ -14,7 +16,7 @@ $(COMPILE): $(SRC) $(DEPS)
 	touch $@
 
 $(BUILD): Dockerfile $(COMPILE)
-	docker build --tag="syrup" .
+	$(docker) build --tag="syrup" .
 	touch $@
 
 .PHONY: test
