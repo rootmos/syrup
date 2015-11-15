@@ -7,11 +7,11 @@ export SYRUP_TARGET_ADDR=localhost
 
 $syrup start
 
-nosetests -v --exe
-
 cleanup ()
 {
     echo "Performing cleanup..."
     $syrup stop
 }
 trap cleanup INT TERM EXIT
+
+nosetests -v --exe
