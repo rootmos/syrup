@@ -210,7 +210,6 @@ class SyrupTests(unittest.TestCase):
     def test_latency(self):
         with server() as serv, syrup(serv.port, latency=200) as s:
             self.assertTrue(poke(s.address, expectLatency=0.2))
-        assert False
 
 if __name__ == '__main__':
     unittest.main()
