@@ -2,5 +2,10 @@ language: erlang
 otp_release:
     - 17.1
 
+addons:
+    apt:
+        packages:
+            - python-nose
+
 script:
     - make test
