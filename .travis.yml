@@ -1,14 +1,10 @@
 language: erlang
 otp_release:
-       - 17.1
+       - 17.2
 
 sudo: required
 services:
     - docker
-
-before_install:
-    - sudo curl -o /usr/bin/kerl -O https://raw.githubusercontent.com/yrashk/kerl/master/kerl
-    - sudo chmod a+x /usr/bin/kerl
 
 script:
     - make test
