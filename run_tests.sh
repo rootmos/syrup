@@ -1,18 +1,17 @@
 #!/bin/sh
 
-docker="sudo docker"
-syrup=$(${docker} run -d syrup)
-${docker} logs -f ${syrup} | logger -t "syrup" &
+syrup=rel/syrup/bin/syrup
 
-export SYRUP_ADDR=$(${docker} inspect --format '{{ .NetworkSettings.IPAddress }}' ${syrup})
-export SYRUP_TARGET_ADDR=$(${docker} inspect --format '{{ .NetworkSettings.Gateway }}' ${syrup})
+export SYRUP_ADDR=localhost
+export SYRUP_TARGET_ADDR=localhost
 
-nosetests -v --exe
+$syrup start
 
 cleanup ()
 {
     echo "Performing cleanup..."
-    ${docker} kill ${syrup}
-    ${docker} rm ${syrup}
+    $syrup stop
 }
 trap cleanup INT TERM EXIT
+
+nosetests -v --exe

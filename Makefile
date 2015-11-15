@@ -8,17 +8,17 @@ docker=sudo docker
 all: $(COMPILE) $(BUILD)
 
 $(DEPS): rebar.config
-	rebar prepare-deps
+	rebar get-deps
 	touch $@
 
 $(COMPILE): $(SRC) $(DEPS)
 	rebar compile generate
 	touch $@
 
-$(BUILD): Dockerfile $(COMPILE)
+.PHONY: docker-image
+docker-image: Dockerfile $(COMPILE)
 	$(docker) build --tag="syrup" .
-	touch $@
 
 .PHONY: test
-test: $(BUILD)
+test: $(COMPILE)
 	./run_tests.sh
