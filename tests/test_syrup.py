@@ -23,9 +23,13 @@ syrup_target_addr = os.environ["SYRUP_TARGET_ADDR"]
 syrup_rest_port = 8080
 
 class syrup(object):
-    def __init__(self, client_port, server_port = int(random.uniform(7000,10000))):
+    def __init__(self, client_port, server_port = None, latency = None):
+        if not server_port:
+            server_port = int(random.uniform(7000,10000))
+
         self.client_port = client_port
         self.server_port = server_port
+        self.latency = latency
 
     def __enter__(self):
         conn = httplib.HTTPConnection(syrup_addr, syrup_rest_port)
@@ -36,8 +40,10 @@ class syrup(object):
             except socket.error:
                 pass
 
-        params = urllib.urlencode({'host': syrup_target_addr, 'port': self.client_port})
-        conn.request("PUT","/tcp/%u?%s" % (self.server_port, params))
+        params = {'host': syrup_target_addr, 'port': self.client_port}
+        if self.latency:
+            params['latency'] = self.latency
+        conn.request("PUT","/tcp/%u?%s" % (self.server_port, urllib.urlencode(params)))
         response = conn.getresponse()
         assert response.status == 201
 
@@ -125,7 +131,7 @@ class server(object):
     def port(self):
         return self.address[1]
 
-def poke(addressTuple, expectLatency = None, N = 100):
+def poke(addressTuple, expectLatency = None, N = 10):
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     sock.setblocking(1)
     sock.settimeout(pokeTimeout)
@@ -197,9 +203,13 @@ class SyrupTests(unittest.TestCase):
         with server() as serv, syrup(serv.port) as s:
             self.assertTrue(poke(s.address))
 
-    def test_latency(self):
+    def test_very_many_pokes(self):
         with server() as serv, syrup(serv.port) as s:
-            self.assertTrue(poke(s.address, expectLatency=0.5))
+            self.assertTrue(poke(s.address, N=10000))
+
+    def test_latency(self):
+        with server() as serv, syrup(serv.port, latency=200) as s:
+            self.assertTrue(poke(s.address, expectLatency=0.2))
 
 if __name__ == '__main__':
     unittest.main()

@@ -33,8 +33,8 @@ from_anything(Req, State) ->
     case cowboy_req:binding(port, Req) of
         {undefined, _Req2} -> error(no_port);
         {Port, Req2} ->
-            {TargetTuple, Req3} = extract_host_port_tuple(Req2),
-            ok = do_create(binary_to_integer(Port), TargetTuple),
+            {Opts, Req3} = extract_options(Req2),
+            ok = do_create(binary_to_integer(Port), Opts),
             {true, Req3, State}
     end.
 
@@ -55,15 +55,14 @@ resource_exists(Req, State) ->
 %% Internal functions
 %% ===================================================================
 
-do_create(Port, {TargetHost, TargetPort}) ->
-    Opts = #syrup_options{host = TargetHost, port = TargetPort},
+do_create(Port, Opts) ->
     {ok, _} = syrup_sup:start_listener(Port, Opts),
     ok.
 
 do_delete(Port) ->
     ok = syrup_sup:stop_listener(Port).
 
-extract_host_port_tuple(Req) ->
+extract_options(Req) ->
     {List, Req2} = cowboy_req:qs_vals(Req),
 
     Host = case proplists:lookup(<<"host">>, List) of
@@ -76,5 +75,13 @@ extract_host_port_tuple(Req) ->
                {_Key2, Value2} -> binary_to_integer(Value2)
            end,
 
-    {{Host, Port}, Req2}.
+    MandatoryOpts = #syrup_options{host = Host, port = Port},
+
+    LatencyOpts = case proplists:lookup(<<"latency">>, List) of
+                      none -> MandatoryOpts;
+                      {_Key3, Value3} ->
+                          MandatoryOpts#syrup_options{latency = binary_to_integer(Value3)}
+                  end,
+
+    {LatencyOpts, Req2}.
     
