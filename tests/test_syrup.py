@@ -6,16 +6,70 @@ import threading
 import random
 import string
 import socket
+import time
+import os
+import httplib
+import urllib
+
+serverPollInterval = 0.01
+pokeTimeout = 2*serverPollInterval
+
+ECHO=1
+DROP=2
+TIMEOUT=3
+
+syrup_addr = os.environ["SYRUP_ADDR"]
+syrup_rest_port = 8080
+
+class syrup(object):
+    def __init__(self, client_port, server_port = int(random.uniform(7000,10000))):
+        self.client_port = client_port
+        self.server_port = server_port
+
+    def __enter__(self):
+        conn = httplib.HTTPConnection(syrup_addr, syrup_rest_port)
+        params = urllib.urlencode({'host': "localhost", 'port': self.client_port})
+        conn.request("PUT","/tcp/%u?%s" % (self.server_port, params))
+        response = conn.getresponse()
+        assert response.status == 201
+
+    def __exit__(self, type, value, traceback):
+        conn = httplib.HTTPConnection(syrup_addr, syrup_rest_port)
+        conn.request("DELETE","/tcp/%u" % self.server_port)
+        assert conn.getresponse().status == 204
+
+    @property
+    def address(self):
+        return (syrup_addr, self.server_port)
 
 class MyEchoHandler(SocketServer.BaseRequestHandler):
     def handle(self):
         self.data = self.request.recv(1024)
         self.request.sendall(self.data)
 
-class echoServer(object):
+class MyDiscardHandler(SocketServer.BaseRequestHandler):
+    pass
+
+class MyTimeoutHandler(SocketServer.BaseRequestHandler):
+    def handle(self):
+        time.sleep(2*pokeTimeout)
+        self.data = self.request.recv(1024)
+        self.request.sendall(self.data)
+
+class server(object):
+    def __init__(self, action = ECHO):
+        if action == ECHO:
+            self.server = SocketServer.TCPServer(("localhost", 0), MyEchoHandler)
+        elif action == DROP:
+            self.server = SocketServer.TCPServer(("localhost", 0), MyDiscardHandler)
+        elif action == TIMEOUT:
+            self.server = SocketServer.TCPServer(("localhost", 0), MyTimeoutHandler)
+        else:
+            raise RuntimeError("Unknown action!")
+
+        self.thread = threading.Thread(target=self.server.serve_forever, kwargs={"poll_interval": serverPollInterval})
+
     def __enter__(self):
-        self.server = SocketServer.TCPServer(("localhost", 0), MyEchoHandler)
-        self.thread = threading.Thread(target=self.server.serve_forever, kwargs={"poll_interval": 0.01})
         self.thread.start()
         return self
 
@@ -26,24 +80,61 @@ class echoServer(object):
             self.thread.join()
 
     @property
-    def server_address(self):
+    def address(self):
         return self.server.server_address
 
-class SyrupTests(unittest.TestCase):
-    def poke(self, addressTuple):
-        salt = ''.join(random.choice(string.ascii_lowercase + string.digits) for _ in range(10))
-        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        sock.connect(addressTuple)
-        try:
-            sock.sendall(salt)
-            response = sock.recv(1024)
-            self.assertEqual(salt, response)
-        finally:
-            sock.close()
+    @property
+    def host(self):
+        return self.address[0]
 
-    def test_sanity(self):
-        with echoServer() as s:
-            self.poke(s.server_address)
+    @property
+    def port(self):
+        return self.address[0]
+
+def poke(addressTuple):
+    salt = ''.join(random.choice(string.ascii_lowercase + string.digits) for _ in range(10))
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    sock.setblocking(1)
+    sock.settimeout(pokeTimeout)
+
+    try:
+        sock.connect(addressTuple)
+    except socket.error:
+        return False
+
+    try:
+        sock.sendall(salt)
+        response = sock.recv(1024)
+        if response == "":
+            return False
+        else:
+            assert salt == response
+            return True
+    except socket.timeout:
+        return False
+    finally:
+        sock.close()
+
+class SanityChecks(unittest.TestCase):
+    def test_sanity_successful(self):
+        with server() as s:
+            poke(s.address)
+
+    def test_sanity_timeout(self):
+        with server(action=TIMEOUT) as s:
+            self.assertFalse(poke(s.address))
+
+    def test_sanity_drop(self):
+        with server(action=DROP) as s:
+            self.assertFalse(poke(s.address))
+
+    def test_sanity_connection_refused(self):
+        self.assertFalse(poke( ("localhost", 9) ))
+
+class SyrupTests(unittest.TestCase):
+    def test_simple(self):
+        with server() as serv, syrup(serv.port) as s:
+            pass
 
 if __name__ == '__main__':
     unittest.main()

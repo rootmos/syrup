@@ -1,3 +1,6 @@
 ebin
 .rebar
 deps
+.*flag
+*pyc
+*swp
