@@ -1,11 +1,14 @@
+language: erlang
+otp_release:
+       - 17.1
 
 sudo: required
 services:
     - docker
 
 before_install:
-    - sudo apt-get update -qq
-    - sudo apt-get install -y erlang rebar
+    - sudo curl -o /usr/bin/kerl -O https://raw.githubusercontent.com/yrashk/kerl/master/kerl
+    - sudo chmod a+x /usr/bin/kerl
 
 script:
     - make test
