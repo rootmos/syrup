@@ -1,12 +1,11 @@
+
 sudo: required
-
-language: erlang
-
 services:
     - docker
 
-otp_release:
-    - 17.1
+before_install:
+    - sudo apt-get update -qq
+    - sudo apt-get install -y erlang
 
 script:
     - make test
