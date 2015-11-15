@@ -8,7 +8,7 @@ docker=sudo docker
 all: $(COMPILE) $(BUILD)
 
 $(DEPS): rebar.config
-	rebar prepare-deps
+	rebar get-deps
 	touch $@
 
 $(COMPILE): $(SRC) $(DEPS)
