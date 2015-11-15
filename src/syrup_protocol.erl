@@ -10,15 +10,27 @@ start_link(Ref, Socket, Transport, Opts) ->
     Pid = spawn_link(?MODULE, init, [Ref, Socket, Transport, Opts]),
     {ok, Pid}.
 
-init(Ref, Socket, Transport, _Opts) ->
+init(Ref, ServerSocket, Transport, Opts) ->
     ok = ranch:accept_ack(Ref),
-    loop(Socket, Transport).
+    {ok, ClientSocket} = gen_tcp:connect(Opts#syrup_options.host,
+                                         Opts#syrup_options.port,
+                                         [{active,false}, {packet,2}]),
+    try loop(ServerSocket, Transport, ClientSocket)
+    after ok = gen_tcp:close(ClientSocket),
+          ok = Transport:close(ServerSocket)
+    end.
 
-loop(Socket, Transport) ->
-    case Transport:recv(Socket, 0, 60000) of
-        {ok, Data} ->
-            Transport:send(Socket, Data),
-            loop(Socket, Transport);
-        _ ->
-            ok = Transport:close(Socket)
+
+loop(ServerSocket, Transport, ClientSocket) ->
+    case Transport:recv(ServerSocket, 0, 1000) of
+        {ok, Request} ->
+            error_logger:info_msg("Relaying request: ~p~n", [Request]),
+            ok = gen_tcp:send(ClientSocket, Request),
+            {ok, Response} = gen_tcp:recv(ClientSocket, 0),
+
+            error_logger:info_msg("Relaying response: ~p~n", [Response]),
+            Transport:send(ServerSocket, Response),
+
+            loop(ServerSocket, Transport, ClientSocket);
+        _ -> ok
     end.

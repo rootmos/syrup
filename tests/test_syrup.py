@@ -12,13 +12,14 @@ import httplib
 import urllib
 
 serverPollInterval = 0.01
-pokeTimeout = 2*serverPollInterval
+pokeTimeout = 0.5
 
 ECHO=1
 DROP=2
 TIMEOUT=3
 
 syrup_addr = os.environ["SYRUP_ADDR"]
+syrup_target_addr = os.environ["SYRUP_TARGET_ADDR"]
 syrup_rest_port = 8080
 
 class syrup(object):
@@ -35,7 +36,7 @@ class syrup(object):
             except socket.error:
                 pass
 
-        params = urllib.urlencode({'host': "localhost", 'port': self.client_port})
+        params = urllib.urlencode({'host': syrup_target_addr, 'port': self.client_port})
         conn.request("PUT","/tcp/%u?%s" % (self.server_port, params))
         response = conn.getresponse()
         assert response.status == 201
@@ -54,6 +55,7 @@ class syrup(object):
 class MyEchoHandler(SocketServer.BaseRequestHandler):
     def handle(self):
         self.data = self.request.recv(1024)
+        print "ECHOing '%s': %s -> %s" % (self.data, self.client_address, self.server.server_address)
         self.request.sendall(self.data)
 
 class MyDiscardHandler(SocketServer.BaseRequestHandler):
@@ -61,18 +63,18 @@ class MyDiscardHandler(SocketServer.BaseRequestHandler):
 
 class MyTimeoutHandler(SocketServer.BaseRequestHandler):
     def handle(self):
-        time.sleep(2*pokeTimeout)
+        time.sleep(1.5*pokeTimeout)
         self.data = self.request.recv(1024)
         self.request.sendall(self.data)
 
 class server(object):
     def __init__(self, action = ECHO):
         if action == ECHO:
-            self.server = SocketServer.TCPServer(("localhost", 0), MyEchoHandler)
+            self.server = SocketServer.TCPServer(("", 0), MyEchoHandler)
         elif action == DROP:
-            self.server = SocketServer.TCPServer(("localhost", 0), MyDiscardHandler)
+            self.server = SocketServer.TCPServer(("", 0), MyDiscardHandler)
         elif action == TIMEOUT:
-            self.server = SocketServer.TCPServer(("localhost", 0), MyTimeoutHandler)
+            self.server = SocketServer.TCPServer(("", 0), MyTimeoutHandler)
         else:
             raise RuntimeError("Unknown action!")
 
@@ -109,17 +111,21 @@ def poke(addressTuple):
     try:
         sock.connect(addressTuple)
     except socket.error:
+        print "POKE failed to connect to %s:%u" % addressTuple
         return False
 
     try:
+        print "POKE sending '%s' to %s:%u" % (salt, addressTuple[0], addressTuple[1])
         sock.sendall(salt)
         response = sock.recv(1024)
+        print "POKE received '%s' from %s:%u" % (response, addressTuple[0], addressTuple[1])
         if response == "":
             return False
         else:
             assert salt == response
             return True
     except socket.timeout:
+        print "POKE timed-out, was sent to %s:%u" % (addressTuple[0], addressTuple[1])
         return False
     finally:
         sock.close()
@@ -127,7 +133,7 @@ def poke(addressTuple):
 class SanityChecks(unittest.TestCase):
     def test_sanity_successful(self):
         with server() as s:
-            poke(s.address)
+            self.assertTrue(poke(s.address))
 
     def test_sanity_timeout(self):
         with server(action=TIMEOUT) as s:
@@ -143,7 +149,7 @@ class SanityChecks(unittest.TestCase):
 class SyrupTests(unittest.TestCase):
     def test_simple(self):
         with server() as serv, syrup(serv.port) as s:
-            poke(s.address)
+            self.assertTrue(poke(s.address))
 
 if __name__ == '__main__':
     unittest.main()
