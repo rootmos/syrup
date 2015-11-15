@@ -28,6 +28,13 @@ class syrup(object):
 
     def __enter__(self):
         conn = httplib.HTTPConnection(syrup_addr, syrup_rest_port)
+        while True:
+            try:
+                conn.connect()
+                break
+            except socket.error:
+                pass
+
         params = urllib.urlencode({'host': "localhost", 'port': self.client_port})
         conn.request("PUT","/tcp/%u?%s" % (self.server_port, params))
         response = conn.getresponse()

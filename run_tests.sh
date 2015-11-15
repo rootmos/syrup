@@ -6,8 +6,6 @@ ${docker} logs -f ${syrup} | logger -t "syrup" &
 
 export SYRUP_ADDR=$(${docker} inspect --format '{{ .NetworkSettings.IPAddress }}' ${syrup})
 
-sleep 1
-
 nosetests -v --exe
 
 cleanup ()
