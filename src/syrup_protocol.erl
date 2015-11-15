@@ -24,13 +24,14 @@ init(Ref, ServerSocket, Transport, Opts) ->
 loop(ServerSocket, Transport, ClientSocket) ->
     case Transport:recv(ServerSocket, 0, 1000) of
         {ok, Request} ->
-            error_logger:info_msg("Relaying request: ~p~n", [Request]),
+            % Relay the request
             ok = gen_tcp:send(ClientSocket, Request),
             {ok, Response} = gen_tcp:recv(ClientSocket, 0),
 
-            error_logger:info_msg("Relaying response: ~p~n", [Response]),
+            % Relay the response
             Transport:send(ServerSocket, Response),
 
+            % Iterate!
             loop(ServerSocket, Transport, ClientSocket);
         _ -> ok
     end.
