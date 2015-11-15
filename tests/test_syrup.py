@@ -40,6 +40,8 @@ class syrup(object):
         response = conn.getresponse()
         assert response.status == 201
 
+        return self
+
     def __exit__(self, type, value, traceback):
         conn = httplib.HTTPConnection(syrup_addr, syrup_rest_port)
         conn.request("DELETE","/tcp/%u" % self.server_port)
@@ -96,7 +98,7 @@ class server(object):
 
     @property
     def port(self):
-        return self.address[0]
+        return self.address[1]
 
 def poke(addressTuple):
     salt = ''.join(random.choice(string.ascii_lowercase + string.digits) for _ in range(10))
@@ -141,7 +143,7 @@ class SanityChecks(unittest.TestCase):
 class SyrupTests(unittest.TestCase):
     def test_simple(self):
         with server() as serv, syrup(serv.port) as s:
-            pass
+            poke(s.address)
 
 if __name__ == '__main__':
     unittest.main()

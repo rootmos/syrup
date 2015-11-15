@@ -1,10 +1,12 @@
 -module(syrup_sup).
 
+-include("syrup.hrl").
+
 -behaviour(supervisor).
 
 %% API
 -export([start_link/0]).
--export([start_listener/1]).
+-export([start_listener/2]).
 -export([stop_listener/1]).
 -export([listener_exists/1]).
 
@@ -21,7 +23,7 @@
 start_link() ->
     supervisor:start_link({local, ?MODULE}, ?MODULE, []).
 
-start_listener(Port) -> do_start_listener(Port).
+start_listener(Port, TargetTuple) -> do_start_listener(Port, TargetTuple).
 stop_listener(Port) -> do_stop_listener(Port).
 listener_exists(Port) -> do_listener_exist(Port).
 
@@ -35,9 +37,9 @@ init([]) -> {ok, { {one_for_one, 5, 10}, []} }.
 %% Internal functions
 %% ===================================================================
 
-do_start_listener(Port) ->
+do_start_listener(Port, Opts) ->
     ListenerSpec = ranch:child_spec(?LISTENER(Port), number_of_listeners(), ranch_tcp,
-                                    [{port, Port}], syrup_protocol, []),
+                                    [{port, Port}], syrup_protocol, Opts),
     Result = case supervisor:start_child(?MODULE, ListenerSpec) of
                  {ok, Pid} -> {ok, Pid};
                  {ok, Pid, _} -> {ok, Pid};
@@ -46,10 +48,12 @@ do_start_listener(Port) ->
              end,
 
     case Result of
-        {ok, ListenerPid} ->
-            error_logger:info_msg("Started listener. Port: ~p. Pid: ~p~n", [Port, ListenerPid]);
+        {ok, _ListenerPid} ->
+            error_logger:info_msg("Started listener: ~p -> ~s:~p~n",
+                                  [Port, Opts#syrup_options.host, Opts#syrup_options.port]);
         {error, ListenerError} ->
-            error_logger:error_msg("Failed to start worker. Port: ~p.~nReason: ~p~n", [Port, ListenerError])
+            error_logger:error_msg("Failed to start worker. Port: ~p.~nReason: ~p~n",
+                                   [Port, ListenerError])
     end,
 
     Result.

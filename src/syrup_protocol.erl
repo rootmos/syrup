@@ -1,6 +1,8 @@
 -module(syrup_protocol).
 -behaviour(ranch_protocol).
 
+-include("syrup.hrl").
+
 -export([start_link/4]).
 -export([init/4]).
 
@@ -8,7 +10,7 @@ start_link(Ref, Socket, Transport, Opts) ->
     Pid = spawn_link(?MODULE, init, [Ref, Socket, Transport, Opts]),
     {ok, Pid}.
 
-init(Ref, Socket, Transport, _Opts = []) ->
+init(Ref, Socket, Transport, _Opts) ->
     ok = ranch:accept_ack(Ref),
     loop(Socket, Transport).
 
