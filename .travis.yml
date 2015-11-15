@@ -1,9 +1,12 @@
-language: erlang
-otp_release:
-       - 17.1
-
 sudo: required
-services:
-      - docker
 
-script: make test
+language: erlang
+
+services:
+    - docker
+
+otp_release:
+    - 17.1
+
+script:
+    - make test
