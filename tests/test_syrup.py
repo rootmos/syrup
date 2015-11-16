@@ -12,11 +12,10 @@ import httplib
 import urllib
 
 serverPollInterval = 0.01
-pokeTimeout = 1.0
+pokeTimeout = 0.4
 
 ECHO=1
 DROP=2
-TIMEOUT=3
 
 syrup_addr = os.environ["SYRUP_ADDR"]
 syrup_target_addr = os.environ["SYRUP_TARGET_ADDR"]
@@ -60,9 +59,6 @@ class syrup(object):
 
 class MyEchoHandler(SocketServer.BaseRequestHandler):
     def handle(self):
-        self.request.setblocking(1)
-        self.request.settimeout(pokeTimeout)
-
         try:
             while True:
                 data = self.request.recv(1024)
@@ -76,25 +72,16 @@ class MyEchoHandler(SocketServer.BaseRequestHandler):
 
 
 class MyDiscardHandler(SocketServer.BaseRequestHandler):
-    pass
-
-class MyTimeoutHandler(SocketServer.BaseRequestHandler):
     def handle(self):
-        self.request.setblocking(1)
-        self.request.settimeout(pokeTimeout)
-        sleepTime = pokeTimeout * 1.5
-
         try:
             while True:
                 data = self.request.recv(1024)
                 if not data:
                     return
 
-                print "ECHOing (with delay %ss) '%s': %s -> %s" % (sleepTime, data, self.client_address, self.server.server_address)
-                time.sleep(sleepTime)
-                self.request.send(data)
+                print "DISCARDing '%s': %s -> %s" % (data, self.client_address, self.server.server_address)
         except socket.timeout:
-            pass
+            print "DISCARD stopping handler due to timeout"
 
 class server(object):
     def __init__(self, action = ECHO):
@@ -102,8 +89,6 @@ class server(object):
             self.server = SocketServer.TCPServer(("", 0), MyEchoHandler)
         elif action == DROP:
             self.server = SocketServer.TCPServer(("", 0), MyDiscardHandler)
-        elif action == TIMEOUT:
-            self.server = SocketServer.TCPServer(("", 0), MyTimeoutHandler)
         else:
             raise RuntimeError("Unknown action!")
 
@@ -131,69 +116,82 @@ class server(object):
     def port(self):
         return self.address[1]
 
-def poke(addressTuple, expectLatency = None, N = 10):
+
+def connectPoke(addressTuple):
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     sock.setblocking(1)
     sock.settimeout(pokeTimeout)
 
     try:
         sock.connect(addressTuple)
+        return sock
     except socket.error:
-        print "POKE failed to connect to %s:%u" % addressTuple
+        return None
+
+
+def poke(addressTuple, action=ECHO, expectLatency = None, N = 10):
+    sock = connectPoke(addressTuple)
+    if not sock:
+        print "POKE unable to connect to %s:%u" % (addressTuple[0], addressTuple[1])
         return False
 
     success = 0
-    drops = 0
+    empty_responses = 0
     timeouts = 0
     latencySum = 0
+    disconnects = 0
 
     for i in range(1, N+1):
         try:
             salt = ''.join(random.choice(string.ascii_lowercase + string.digits) for _ in range(10))
             print "POKE (%u/%u) sending '%s' to %s:%u" % (i, N, salt, addressTuple[0], addressTuple[1])
-
             start_time = time.time()
-            sock.sendall(salt)
+            sock.send(salt)
             response = sock.recv(1024)
             elapsed_time = time.time() - start_time
 
             print "POKE (%u/%u) received '%s' from %s:%u after %s seconds" % (i, N, response, addressTuple[0], addressTuple[1], elapsed_time)
 
             if response == "":
-                drops += 1
+                empty_responses += 1
             else:
                 latencySum += elapsed_time
                 assert salt == response
                 success += 1
         except socket.timeout:
-            print "POKE timed-out, was sent to %s:%u" % (addressTuple[0], addressTuple[1])
+            print "POKE (%u/%u) timed-out, was sent to %s:%u" % (i, N, addressTuple[0], addressTuple[1])
             timeouts += 1
+        except socket.error:
+            print "POKE (%u/%u) disconnect, was sent to %s:%u" % (i, N, addressTuple[0], addressTuple[1])
+            disconnects += 1
+            sock = connectPoke(addressTuple)
     sock.close()
 
-    print "POKE N: %u, success: %u, drops: %u, timeouts: %u" % (N, success, drops, timeouts)
+    print "POKE N: %u, success: %u, empty_responses: %u, timeouts: %u, disconnects: %u" % (N, success, empty_responses, timeouts, disconnects)
 
     averageLatency = latencySum / N
     print "POKE average latency: %ss" % averageLatency
     if expectLatency:
         assert averageLatency >= expectLatency
 
-    if timeouts or drops:
-        return False
-    else:
+    if action == ECHO:
+        test = success
+    elif action == DROP:
+        test = timeouts
+
+    if test == N:
         return True
+    else:
+        return False
 
 class SanityChecks(unittest.TestCase):
     def test_sanity_successful(self):
         with server() as s:
             self.assertTrue(poke(s.address))
 
-    def test_sanity_timeout(self):
-        with server(action=TIMEOUT) as s:
-            self.assertFalse(poke(s.address, N = 1))
-
     def test_sanity_drop(self):
         with server(action=DROP) as s:
-            self.assertFalse(poke(s.address, N = 1))
+            self.assertTrue(poke(s.address, action = DROP))
 
     def test_sanity_connection_refused(self):
         self.assertFalse(poke( ("localhost", 9) ))
