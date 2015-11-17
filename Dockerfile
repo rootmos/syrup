@@ -1,5 +1,16 @@
-FROM ubuntu:vivid
+FROM unbalancedparentheses/erlang:17.4
 
-COPY rel/syrup /root/syrup
+WORKDIR /root
+COPY rebar.config .
 
-CMD /root/syrup/bin/syrup foreground
+RUN mkdir src
+COPY src src
+
+RUN mkdir rel
+COPY rel/reltool.config rel
+RUN mkdir rel/files
+COPY rel/files rel/files
+
+RUN rebar get-deps compile generate
+
+CMD rel/syrup/bin/syrup foreground
