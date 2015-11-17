@@ -1,16 +1,16 @@
 FROM unbalancedparentheses/erlang:17.4
 
+COPY rebar.config /root/rebar.config
+
+RUN mkdir /root/src
+COPY src /root/src
+
+RUN mkdir /root/rel
+COPY rel/reltool.config /root/rel/reltool.config
+RUN mkdir /root/rel/files
+COPY rel/files /root/rel/files
+
 WORKDIR /root
-COPY rebar.config .
-
-RUN mkdir src
-COPY src src
-
-RUN mkdir rel
-COPY rel/reltool.config rel
-RUN mkdir rel/files
-COPY rel/files rel/files
-
 RUN rebar get-deps compile generate
 
 CMD rel/syrup/bin/syrup foreground
