@@ -38,7 +38,8 @@ init([]) -> {ok, { {one_for_one, 5, 10}, []} }.
 %% ===================================================================
 
 do_start_listener(Port, Opts) ->
-    ListenerSpec = ranch:child_spec(?LISTENER(Port), number_of_listeners(), ranch_tcp,
+    N = number_of_listeners(),
+    ListenerSpec = ranch:child_spec(?LISTENER(Port), N, ranch_tcp,
                                     [{port, Port}], syrup_protocol, Opts),
     Result = case supervisor:start_child(?MODULE, ListenerSpec) of
                  {ok, Pid} -> {ok, Pid};
@@ -49,8 +50,8 @@ do_start_listener(Port, Opts) ->
 
     case Result of
         {ok, _ListenerPid} ->
-            error_logger:info_msg("Started listener: ~p -> ~s:~p~n",
-                                  [Port, Opts#syrup_options.host, Opts#syrup_options.port]);
+            error_logger:info_msg("Started ~p listeners: ~p -> ~s:~p~n",
+                                  [N, Port, Opts#syrup_options.host, Opts#syrup_options.port]);
         {error, ListenerError} ->
             error_logger:error_msg("Failed to start worker. Port: ~p.~nReason: ~p~n",
                                    [Port, ListenerError])
@@ -77,6 +78,6 @@ do_listener_exist(Port) ->
 
 number_of_listeners() ->
     case os:getenv("SYRUP_LISTENERS") of
-        false -> 10;
+        false -> 100;
         Value -> list_to_integer(Value)
     end.
