@@ -11,50 +11,45 @@ start_link(Ref, Socket, Transport, Opts) ->
     {ok, Pid}.
 
 init(Ref, ServerSocket, Transport, Opts) ->
-    process_flag(trap_exit, true),
-
     ok = ranch:accept_ack(Ref),
+    TcpOpts = [{active,once}, {sndbuf, 100000}, {recbuf, 100000}],
     {ok, ClientSocket} = gen_tcp:connect(Opts#syrup_options.host,
                                          Opts#syrup_options.port,
-                                         [{active,false}, {reuseaddr, true}]),
+                                         []),
+    inet:setopts(ServerSocket, TcpOpts),
+    inet:setopts(ClientSocket, TcpOpts),
 
-    try RequestPid = spawn_link(fun() -> relayRequest(ServerSocket, Transport, ClientSocket, Opts) end),
-        ResponsePid = spawn_link(fun() -> relayResponse(ServerSocket, Transport, ClientSocket, Opts) end),
-        receive
-            {'EXIT', RequestPid, normal} -> ok;
-            {'EXIT', ResponsePid, normal} -> ok;
-            UnknownMessage -> error_logger:error_msg("Received unknown message: ~p~n", [UnknownMessage]),
-                              error({unknown_message, UnknownMessage})
-        end
+    try loop(ServerSocket, Transport, ClientSocket, Opts)
     after ok = gen_tcp:close(ClientSocket),
           ok = Transport:close(ServerSocket)
     end.
 
+loop(ServerSocket, Transport, ClientSocket, Opts) ->
+    receive
+        {inet_reply, _, ok} ->
+            loop(ServerSocket, Transport, ClientSocket, Opts);
+        {inet_reply, _, Status} ->
+            exit(Status);
 
-relayRequest(ServerSocket, Transport, ClientSocket, Opts) ->
-    case Transport:recv(ServerSocket, 0, 1000) of
-        {ok, Request} ->
-            ok = gen_tcp:send(ClientSocket, Request),
-
-            % Iterate!
-            relayRequest(ServerSocket, Transport, ClientSocket, Opts);
-        _ -> ok
-    end.
-
-relayResponse(ServerSocket, Transport, ClientSocket, Opts) ->
-    case gen_tcp:recv(ClientSocket, 0) of
-        {ok, Response} ->
-
+        {tcp, ServerSocket, Request} ->
+            try erlang:port_command(ClientSocket, Request)
+            catch error:Error -> exit(Error)
+            end,
+            %%ok = gen_tcp:send(ClientSocket, Request),
+            inet:setopts(ServerSocket, [{active, once}]),
+            loop(ServerSocket, Transport, ClientSocket, Opts);
+        {tcp, ClientSocket, Response} ->
             % If we're asked to, wait a while
             case Opts#syrup_options.latency of
                 0 -> ok;
                 Time -> timer:sleep(Time)
             end,
 
-            % Relay the response
-            Transport:send(ServerSocket, Response),
+            try erlang:port_command(ServerSocket, Response)
+            catch error:Error -> exit(Error)
+            end,
 
-            % Iterate!
-            relayResponse(ServerSocket, Transport, ClientSocket, Opts);
+            inet:setopts(ClientSocket, [{active, once}]),
+            loop(ServerSocket, Transport, ClientSocket, Opts);
         _ -> ok
     end.
