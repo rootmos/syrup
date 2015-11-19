@@ -22,3 +22,7 @@ docker-image: Dockerfile $(COMPILE)
 .PHONY: test
 test: $(COMPILE)
 	./run_tests.sh
+
+.PHONY: benchmark
+benchmark: $(COMPILE)
+	./benchmark_degradation.sh
