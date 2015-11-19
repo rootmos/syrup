@@ -11,11 +11,12 @@ import os
 import httplib
 import urllib
 
-serverPollInterval = 0.01
+serverPollInterval = 0.001
 pokeTimeout = 0.4
 
 ECHO=1
 DROP=2
+REFUSE=3
 
 syrup_addr = os.environ["SYRUP_ADDR"]
 syrup_target_addr = os.environ["SYRUP_TARGET_ADDR"]
@@ -129,19 +130,22 @@ def connectPoke(addressTuple):
         return None
 
 
-def poke(addressTuple, action=ECHO, expectLatency = None, N = 10):
-    sock = connectPoke(addressTuple)
-    if not sock:
-        print "POKE unable to connect to %s:%u" % (addressTuple[0], addressTuple[1])
-        return False
+def poke(addressTuple, action=ECHO, expectLatency = None, N = 5):
 
     success = 0
+    refused = 0
     empty_responses = 0
     timeouts = 0
     latencySum = 0
     disconnects = 0
 
     for i in range(1, N+1):
+        sock = connectPoke(addressTuple)
+        if not sock:
+            print "POKE (%u/%u) refused connection to %s:%u" % (i, N, addressTuple[0], addressTuple[1])
+            refused += 1
+            continue
+
         try:
             salt = ''.join(random.choice(string.ascii_lowercase + string.digits) for _ in range(10))
             print "POKE (%u/%u) sending '%s' to %s:%u" % (i, N, salt, addressTuple[0], addressTuple[1])
@@ -164,10 +168,10 @@ def poke(addressTuple, action=ECHO, expectLatency = None, N = 10):
         except socket.error:
             print "POKE (%u/%u) disconnect, was sent to %s:%u" % (i, N, addressTuple[0], addressTuple[1])
             disconnects += 1
-            sock = connectPoke(addressTuple)
-    sock.close()
+        finally:
+            sock.close()
 
-    print "POKE N: %u, success: %u, empty_responses: %u, timeouts: %u, disconnects: %u" % (N, success, empty_responses, timeouts, disconnects)
+    print "POKE N: %u, success: %u, empty_responses: %u, timeouts: %u, disconnects: %u, refused: %u" % (N, success, empty_responses, timeouts, disconnects, refused)
 
     averageLatency = latencySum / N
     print "POKE average latency: %ss" % averageLatency
@@ -178,6 +182,8 @@ def poke(addressTuple, action=ECHO, expectLatency = None, N = 10):
         test = success
     elif action == DROP:
         test = timeouts
+    elif action == REFUSE:
+        test = refused
 
     if test == N:
         return True
@@ -194,7 +200,7 @@ class SanityChecks(unittest.TestCase):
             self.assertTrue(poke(s.address, action = DROP))
 
     def test_sanity_connection_refused(self):
-        self.assertFalse(poke( ("localhost", 9) ))
+        self.assertTrue(poke(("localhost", 9), action = REFUSE))
 
 class SyrupTests(unittest.TestCase):
     def test_simple(self):
