@@ -77,11 +77,20 @@ extract_options(Req) ->
 
     MandatoryOpts = #syrup_options{host = Host, port = Port},
 
-    LatencyOpts = case proplists:lookup(<<"latency">>, List) of
-                      none -> MandatoryOpts;
-                      {_Key3, Value3} ->
-                          MandatoryOpts#syrup_options{latency = binary_to_integer(Value3)}
-                  end,
+    LatencyOpts = set_latency(MandatoryOpts, List),
+    BufferSizeOpts = set_buffer_size(LatencyOpts),
 
-    {LatencyOpts, Req2}.
+    {BufferSizeOpts, Req2}.
+
+set_latency(Opts, List) ->
+    case proplists:lookup(<<"latency">>, List) of
+        none -> Opts;
+        {_Key, Value} -> Opts#syrup_options{latency = binary_to_integer(Value)}
+    end.
     
+set_buffer_size(Opts) ->
+    case os:getenv("SYRUP_BUFFER") of
+        false -> Opts;
+        Value -> Opts#syrup_options{bufferSize = list_to_integer(Value)}
+    end.
+

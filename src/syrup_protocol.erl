@@ -12,12 +12,13 @@ start_link(Ref, Socket, Transport, Opts) ->
 
 init(Ref, ServerSocket, Transport, Opts) ->
     ok = ranch:accept_ack(Ref),
-    TcpOpts = [{active,once}, {sndbuf, 100000}, {recbuf, 100000}],
+    TcpOpts = [{active,once},
+               {sndbuf, Opts#syrup_options.bufferSize},
+               {recbuf, Opts#syrup_options.bufferSize}],
     {ok, ClientSocket} = gen_tcp:connect(Opts#syrup_options.host,
                                          Opts#syrup_options.port,
-                                         []),
+                                         TcpOpts),
     inet:setopts(ServerSocket, TcpOpts),
-    inet:setopts(ClientSocket, TcpOpts),
 
     try loop(ServerSocket, Transport, ClientSocket, Opts)
     after ok = gen_tcp:close(ClientSocket),
@@ -35,7 +36,6 @@ loop(ServerSocket, Transport, ClientSocket, Opts) ->
             try erlang:port_command(ClientSocket, Request)
             catch error:Error -> exit(Error)
             end,
-            %%ok = gen_tcp:send(ClientSocket, Request),
             inet:setopts(ServerSocket, [{active, once}]),
             loop(ServerSocket, Transport, ClientSocket, Opts);
         {tcp, ClientSocket, Response} ->
