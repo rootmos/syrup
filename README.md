@@ -6,6 +6,11 @@ Syrup is a utility for simulating degraded network conditions such as
 latency and flaky connections. Basically, it's just a glorified port-forwarder
 with some extra logic to put throw a monkey wrench into the connection.
 
+Syrup is build using [Erlang](http://www.erlang.org) with [Ranch](https://github.com/ninenines/ranch)
+and [Cowboy](https://github.com/ninenines/cowboy).
+It's distributed using [Docker](http://docker.io), the image can be found
+[here](https://hub.docker.com/r/rootmos/syrup).
+
 Installation
 ============
 There's two ways to install Syrup:
@@ -14,7 +19,8 @@ There's two ways to install Syrup:
 
 ## Installation with Docker
 The [syrup](https://github.com/rootmos/syrup/blob/master/syrup) script can
-automagically pull the [image](https://hub.docker.com/r/rootmos/syrup) for you, so all you need to do is:
+automagically pull the [image](https://hub.docker.com/r/rootmos/syrup) for you,
+so all you need to do is:
 
 ```bash
 $ wget https://raw.githubusercontent.com/rootmos/syrup/master/syrup
@@ -40,7 +46,7 @@ repository root).
 Usage
 =====
 Syrup is controlled by using the [syrup](https://github.com/rootmos/syrup/blob/master/syrup) script.
-*Note* that you might need to run it as `./syrup` (unless you put in it your `PATH`) and it might also require `sudo` (if you want to use Docker).
+**Note** that you might need to run it as `./syrup` (unless you put in it your `PATH`) and it might also require `sudo` (if you want to use Docker).
 
 ```bash
 $ syrup start
