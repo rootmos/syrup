@@ -1,0 +1,230 @@
+#!/bin/sh
+
+# Configuration variables
+##############################################################################
+export SYRUP_ADDR=127.0.0.1
+export SYRUP_REST_PORT=9090
+
+docker_image="rootmos/syrup:latest"
+docker_name="syrup"
+docker_env="-e SYRUP_REST_PORT=$SYRUP_REST_PORT"
+docker_run_options="-d --net=host $docker_env"
+
+# Decide how we should run Syrup
+##############################################################################
+
+# Is it present in the PATH?
+syrup_path=$(which syrup)
+
+# If not, are we in a build version of Syrup?
+script_path=$(dirname $(readlink -f $0))
+if [ ! -x "$syrup_path" ]; then
+    syrup_path=$script_path/rel/syrup/bin/syrup
+fi
+
+# If not, then can we use docker?
+if [ ! -x "$syrup_path" ]; then
+    docker=$(which docker)
+    if [ ! -x "$docker" ]; then
+        >&2 echo "Cannot find a syrup binary! Tried in the PATH, under $script_path/rel/syrup/bin, and cannot find Docker."
+        exit 3
+    fi
+fi
+
+# Internal functions
+##############################################################################
+
+log() {
+    if [ -n "$VERBOSE" ]; then
+        echo "VERBOSE:" $*
+    fi
+}
+
+error() {
+    >&2 echo "ERROR:" $*
+}
+
+syrup_start() {
+    if [ -x "$syrup_path" ]; then
+        $syrup_path start > /dev/null
+        if [ $? -eq 0 ]; then
+            log "Successfully started Syrup"
+        else
+            error "Unable to start Syrup using: $syrup_path"
+            return 1
+        fi
+    elif [ -x "$docker" ]; then
+        $docker run --name $docker_name -d $docker_run_options $docker_image > /dev/null
+        if [ $? -eq 0 ]; then
+            log "Successfully started Syrup (using Docker)"
+        else
+            error "Unable to start Syrup using Docker!"
+            return 1
+        fi
+    else
+        >&2 echo "Cannot start syrup: unknown execution mode!"
+        exit 3
+    fi
+}
+
+syrup_stop() {
+    if [ -x "$syrup_path" ]; then
+        $syrup_path stop > /dev/null
+        if [ $? -eq 0 ]; then
+            log "Successfully stopped Syrup"
+        else
+            error "Unable to stop Syrup using: $syrup_path"
+            return 1
+        fi
+    elif [ -x "$docker" ]; then
+        $docker stop $docker_name > /dev/null && $docker rm $docker_name > /dev/null
+        if [ $? -eq 0 ]; then
+            log "Successfully stopped Syrup (using Docker)" 
+        else
+            error "Unable to stop Syrup using Docker"
+            return 1
+        fi
+    else
+        >&2 echo "Cannot stop syrup: unknown execution mode!"
+        exit 3
+    fi
+}
+
+syrup_ping() {
+    if [ -x "$syrup_path" ]; then
+        $syrup_path ping
+        if [ $? -eq 0 ]; then
+            log "Successfully pinged Syrup"
+        else
+            error "Unable to ping Syrup!"
+            return 1
+        fi
+    elif [ -x "$docker" ]; then
+        $docker exec $docker_name rel/syrup/bin/syrup ping
+        if [ $? -eq 0 ]; then
+            log "Successfully pinged Syrup (using Docker)"
+        else
+            error "Unable to ping Syrup! (using Docker)"
+            return 1
+        fi
+    else
+        >&2 echo "Cannot ping syrup: unknown execution mode!"
+        exit 3
+    fi
+}
+
+syrup_add() {
+    # Set defaults
+    host=127.0.0.1
+    from=
+    to=
+
+    # Parse options
+    while getopts "h:f:t:" opt; do
+        case $opt in
+            h) host=$OPTARG;;
+            f) from=$OPTARG;;
+            t) to=$OPTARG;;
+            *) usage;;
+        esac
+    done
+
+    # Check the arguments
+    if [ -z "$host" ]; then
+        error "No target host specified!"
+        exit 1
+    fi
+
+    if [ -z "$from" ]; then
+        error "No from port specified!"
+        exit 1
+    fi
+
+    if [ -z "$to" ]; then
+        error "No forward-to port specified!"
+        exit 1
+    fi
+
+    # Send configuration
+    curl -X PUT --fail "$SYRUP_ADDR:$SYRUP_REST_PORT/tcp/$from?host=$host&port=$to"
+
+    # Rejoice or complain
+    if [ $? -eq 0 ]; then
+        log "Forwarding: $SYRUP_ADDR:$from -> $host:$to"
+    else
+        error "Forwarding failed!"
+    fi
+}
+
+syrup_rm() {
+    # Check arguments
+    if [ $# -eq 1 ]; then
+        port=$1
+    else
+        error "Wrong number of arguments"
+        usage
+    fi
+
+    # Send configuration
+    curl -X DELETE --fail "$SYRUP_ADDR:$SYRUP_REST_PORT/tcp/$port"
+
+    # Rejoice or complain
+    if [ $? -eq 0 ]; then
+        log "Deleting forwarding from $SYRUP_ADDR:$from"
+    else
+        error "Removal failed!"
+    fi
+}
+
+# Usage
+##############################################################################
+
+usage() {
+    cat <<EOF
+Usage: $(basename $0) [-v] (start|stop|ping|add|rm)
+
+Global options:
+-v          Be verbose
+
+Add command usage: $(basename $0) add [-h HOST] -f FROM -t TO
+-h HOST     Forward to HOST
+-f FROM     Forward from port FROM
+-t TO       Forward to port TO
+
+Remove command usage: $(basename $0) rm PORT
+
+EOF
+    exit 1
+}
+
+# Parse global options
+##############################################################################
+
+while getopts "v" opt; do
+    case $opt in
+        v) VERBOSE=1;;
+        *) usage;;
+    esac
+done
+shift $((OPTIND-1))
+
+# Parse and delegate subcommands
+##############################################################################
+
+if [ $# -eq 0 ]; then
+    error "Need to give a command!"
+    usage
+fi
+
+command=$1
+shift 1
+case $command in
+    start) syrup_start $*;;
+    stop) syrup_stop $*;;
+    ping) syrup_ping $*;;
+    add) syrup_add $*;;
+    rm) syrup_rm $*;;
+    *)  error "Unknown subcommand: $command"
+        usage
+        ;;
+esac
