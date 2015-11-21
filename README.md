@@ -39,7 +39,8 @@ repository root).
 
 Usage
 =====
-Syrup is controlled by using the [syrup](https://github.com/rootmos/syrup/blob/master/syrup) script:
+Syrup is controlled by using the [syrup](https://github.com/rootmos/syrup/blob/master/syrup) script.
+*Note* that you might need to run it as `./syrup` (unless you put in it your `PATH`) and it might also require `sudo` (if you want to use Docker).
 
 ```bash
 $ syrup start
