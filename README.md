@@ -3,7 +3,8 @@ Syrup
 [![Build Status](https://travis-ci.org/rootmos/syrup.svg)](https://travis-ci.org/rootmos/syrup)
 
 Syrup is a utility for simulating degraded network conditions such as
-latency and flaky connections.
+latency and flaky connections. Basically, it's just a glorified port-forwarder
+with some extra logic to put throw a monkey wrench into the connection.
 
 Installation
 ============
@@ -12,7 +13,8 @@ There's two ways to install Syrup:
 * Manual building (requires an [Erlang](http://www.erlang.org) environment)
 
 ## Installation with Docker
-The [syrup](https://github.com/rootmos/syrup/blob/master/syrup) script can automagically pull the [image](https://hub.docker.com/r/rootmos/syrup) for you, so all you need to do is:
+The [syrup](https://github.com/rootmos/syrup/blob/master/syrup) script can
+automagically pull the [image](https://hub.docker.com/r/rootmos/syrup) for you, so all you need to do is:
 
 ```bash
 $ wget https://raw.githubusercontent.com/rootmos/syrup/master/syrup
@@ -30,5 +32,65 @@ $ git pull https://github.com/rootmos/syrup
 $ cd syrup
 $ make
 ```
-Then the `syrup` directory should contain a built distribution in the `rel/syrup` directory.
+The `syrup` directory should contain a built distribution in the `rel/syrup`
+directory, which will be detected by the `syrup` script (located in the
+repository root).
 
+
+Usage
+=====
+Syrup is controlled by using the [syrup](https://github.com/rootmos/syrup/blob/master/syrup) script:
+
+```bash
+$ syrup start
+
+$ syrup ping
+pong
+
+$syrup stop
+```
+
+To add a port-forwarding from localhost:6001 to localhost:5001, call:
+```bash
+$ syrup add -f 6001 -t 5001
+```
+If you want to forward to another address use the `-h` option.
+```bash
+$ syrup add -f 6001 -h 192.168.0.7 -t 5001
+```
+
+To remove a port-forwarding:
+```bash
+$ syrup rm 6001
+```
+
+Example
+=======
+Here's an example session using [iperf](http://sourceforge.net/projects/iperf2):
+
+In one shell start iperf's server:
+```bash
+$ iperf -s -p 5001
+------------------------------------------------------------
+Server listening on TCP port 5001
+TCP window size: 85.3 KByte (default)
+------------------------------------------------------------
+```
+
+Then in another shell run the client:
+```
+$ syrup start
+
+$ syrup add -f 6001 -t 5001
+
+$ iperf -c localhost -p 6001
+------------------------------------------------------------
+Client connecting to localhost, TCP port 6001
+TCP window size: 2.50 MByte (default)
+------------------------------------------------------------
+[  3] local 127.0.0.1 port 57840 connected with 127.0.0.1 port 6001
+[ ID] Interval       Transfer     Bandwidth
+[  3]  0.0-10.0 sec  25.7 GBytes  22.1 Gbits/sec
+
+$ syrup stop
+```
