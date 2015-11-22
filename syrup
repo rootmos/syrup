@@ -118,13 +118,15 @@ syrup_add() {
     host=127.0.0.1
     from=
     to=
+    latency=
 
     # Parse options
-    while getopts "h:f:t:" opt; do
+    while getopts "h:f:t:l:" opt; do
         case $opt in
             h) host=$OPTARG;;
             f) from=$OPTARG;;
             t) to=$OPTARG;;
+            l) latency="&latency=$OPTARG";;
             *) usage;;
         esac
     done
@@ -146,7 +148,7 @@ syrup_add() {
     fi
 
     # Send configuration
-    curl -X PUT --fail "$SYRUP_ADDR:$SYRUP_REST_PORT/tcp/$from?host=$host&port=$to"
+    curl -X PUT --fail "$SYRUP_ADDR:$SYRUP_REST_PORT/tcp/$from?host=$host&port=$to$latency"
 
     # Rejoice or complain
     if [ $? -eq 0 ]; then
@@ -190,6 +192,7 @@ Add command usage: $(basename $0) add [-h HOST] -f FROM -t TO
 -h HOST     Forward to HOST
 -f FROM     Forward from port FROM
 -t TO       Forward to port TO
+-l LATENCY  Add LATENCY milliseconds of latency to the connection
 
 Remove command usage: $(basename $0) rm PORT
 

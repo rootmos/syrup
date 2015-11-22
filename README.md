@@ -61,9 +61,13 @@ To add a port-forwarding from localhost:6001 to localhost:5001, call:
 ```bash
 $ syrup add -f 6001 -t 5001
 ```
-If you want to forward to another address use the `-h` option.
+If you want to forward to another address use the `-h` option:
 ```bash
 $ syrup add -f 6001 -h 192.168.0.7 -t 5001
+```
+If you want to add some latency to the connection use the `-l` option:
+```bash
+$ syrup add -f 6001 -t 5001 -l 200
 ```
 
 To remove a port-forwarding:
