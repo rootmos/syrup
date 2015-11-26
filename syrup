@@ -8,7 +8,7 @@ export SYRUP_REST_PORT=9090
 docker_image="rootmos/syrup:latest"
 docker_name="syrup"
 docker_env="-e SYRUP_REST_PORT=$SYRUP_REST_PORT"
-docker_run_options="-d --net=host $docker_env"
+docker_run_options="--net=host $docker_env"
 
 # Decide how we should run Syrup
 ##############################################################################
@@ -45,8 +45,22 @@ error() {
 }
 
 syrup_start() {
+    foreground=
+    # Parse options
+    while getopts "f" opt; do
+        case $opt in
+            f) foreground=1;;
+            *) usage;;
+        esac
+    done
+
     if [ -x "$syrup_path" ]; then
-        $syrup_path start > /dev/null
+        if [ -z "$foreground" ]; then
+            $syrup_path start > /dev/null
+        else
+            $syrup_path foreground
+        fi
+
         if [ $? -eq 0 ]; then
             log "Successfully started Syrup"
         else
@@ -54,8 +68,19 @@ syrup_start() {
             return 1
         fi
     elif [ -x "$docker" ]; then
-        $docker run --name $docker_name -d $docker_run_options $docker_image > /dev/null
-        if [ $? -eq 0 ]; then
+        pipe=
+        if [ -z "$foreground" ]; then
+            docker_run_options="$docker_run_options -d"
+            pipe="> /dev/null"
+        else
+            docker_run_options="$docker_run_options -it --rm"
+        fi
+
+        $docker run --name $docker_name $docker_run_options $docker_image $pipe
+
+        if [ -n "$foreground" -a $? -eq 130 ]; then
+            log "Syrup interrupted with Ctrl-C (using Docker)"
+        elif [ $? -eq 0 ]; then
             log "Successfully started Syrup (using Docker)"
         else
             error "Unable to start Syrup using Docker!"
@@ -187,6 +212,9 @@ Usage: $(basename $0) [-v] (start|stop|ping|add|rm)
 
 Global options:
 -v          Be verbose
+
+Start command usage: $(basename $0) start [-f]
+-f          Run in the foreground
 
 Add command usage: $(basename $0) add [-h HOST] -f FROM -t TO
 -h HOST     Forward to HOST
